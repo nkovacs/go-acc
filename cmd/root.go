@@ -32,11 +32,11 @@ $ go-acc $(glide novendor)`,
 
 		mode, err := cmd.Flags().GetString("covermode")
 		if err != nil {
-			fatalf("%s", err)
+			fatalf("Get covermode: %s", err)
 		}
 
 		payload := "mode: " + mode + "\n"
-		newArgs := []string{}
+		packages := []string{}
 		for _, a := range args {
 			if a[len(a)-4:] == "/..." {
 				var buf bytes.Buffer
@@ -44,7 +44,8 @@ $ go-acc $(glide novendor)`,
 				c.Stdout = &buf
 				c.Stderr = &buf
 				if err := c.Run(); err != nil {
-					fatalf("%s", err)
+					fmt.Println(buf.String())
+					fatalf("List packages: %s", err)
 				}
 
 				add := []string{}
@@ -54,16 +55,37 @@ $ go-acc $(glide novendor)`,
 					}
 				}
 
-				newArgs = append(newArgs, add...)
+				packages = append(packages, add...)
 			} else {
-				newArgs = append(newArgs, a)
+				packages = append(packages, a)
 			}
 		}
 
-		files := make([]string, len(newArgs))
-		for k, a := range newArgs {
+		packageMap := make(map[string]bool)
+		for _, a := range packages {
+			packageMap[a] = true
+		}
+
+		files := make([]string, len(packages))
+		for k, a := range packages {
+
+			var buf bytes.Buffer
+			c := exec.Command("go", "list", "-f", `{{join .Imports "\n"}}`, a)
+			c.Stdout = &buf
+			c.Stderr = &buf
+			if err := c.Run(); err != nil {
+				fmt.Println(buf.String())
+				fatalf("List imports: %s", err)
+			}
+			coverPkg := []string{a}
+			for _, s := range strings.Split(buf.String(), "\n") {
+				if len(s) > 0 && packageMap[s] {
+					coverPkg = append(coverPkg, s)
+				}
+			}
+
 			files[k] = filepath.Join(os.TempDir(), uuid.New()) + ".cc.tmp"
-			c := exec.Command("go", "test", "-covermode="+mode, "-coverprofile="+files[k], "-coverpkg="+strings.Join(newArgs, ","), a)
+			c = exec.Command("go", "test", "-covermode="+mode, "-coverprofile="+files[k], "-coverpkg="+strings.Join(coverPkg, ","), a)
 			c.Stdout = os.Stdout
 			c.Stderr = os.Stderr
 			c.Stdin = os.Stdin
@@ -79,7 +101,7 @@ $ go-acc $(glide novendor)`,
 
 			p, err := ioutil.ReadFile(file)
 			if err != nil {
-				fatalf("%s", err)
+				fatalf("Read file: %s", err)
 			}
 
 			ps := strings.Split(string(p), "\n")
@@ -88,11 +110,11 @@ $ go-acc $(glide novendor)`,
 
 		output, err := cmd.Flags().GetString("output")
 		if err != nil {
-			fatalf("%s", err)
+			fatalf("Get output filename: %s", err)
 		}
 
 		if err := ioutil.WriteFile(output, []byte(payload), 0644); err != nil {
-			fatalf("%s", err)
+			fatalf("Write merged output: %s", err)
 		}
 	},
 }
