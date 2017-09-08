@@ -70,7 +70,7 @@ $ go-acc $(glide novendor)`,
 		for k, a := range packages {
 
 			var buf bytes.Buffer
-			c := exec.Command("go", "list", "-f", `{{join .Imports "\n"}}`, a)
+			c := exec.Command("go", "list", "-f", `{{join .Deps "\n"}}`, a)
 			c.Stdout = &buf
 			c.Stderr = &buf
 			if err := c.Run(); err != nil {
